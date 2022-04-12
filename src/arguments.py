@@ -2,6 +2,7 @@ import argparse
 
 def get_args():
     parser = argparse.ArgumentParser(description='RL')
+    parser.add_argument("--run-name", type=str, default="debug", help="Run name")
     parser.add_argument("--seed", default=0, type=int,
         help="sets Gym, PyTorch and Numpy seeds")
     parser.add_argument("--morphologies", nargs="*", type=str, default=['walker'],
