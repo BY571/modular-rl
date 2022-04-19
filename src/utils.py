@@ -14,7 +14,7 @@ from config import *
 def makeEnvWrapper(env_name, obs_max_len=None, seed=0):
     """return wrapped gym environment for parallel sample collection (vectorized environments)"""
     def helper():
-        e = gym.make("environments:%s-v0" % env_name)
+        e = gym.make("%s-v0" % env_name)
         e.seed(seed)
         return wrappers.ModularEnvWrapper(e, obs_max_len)
     return helper
@@ -59,7 +59,7 @@ def registerEnvs(env_names, max_episode_steps, custom_xml):
                  max_episode_steps=max_episode_steps,
                  entry_point="environments.%s:ModularEnv" % env_file,
                  kwargs=params)
-        env = wrappers.IdentityWrapper(gym.make("environments:%s-v0" % env_name))
+        env = wrappers.IdentityWrapper(gym.make("%s-v0" % env_name))
         # the following is the same for each env
         limb_obs_size = env.limb_obs_size
         max_action = env.max_action

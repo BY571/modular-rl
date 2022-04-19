@@ -9,24 +9,16 @@ def get_args():
         help="which morphology env to run (walker, hopper, etc)")
     parser.add_argument("--custom_xml", type=str, default=None,
         help="path to MuJoCo xml files (can be either one file or a directory containing multiple files)")
-    parser.add_argument("--start_timesteps", default=1e4, type=int,
+    parser.add_argument("--start_timesteps", default=5e3, type=int,
         help="How many time steps purely random policy is run for?")
     parser.add_argument('--max_timesteps', type=int, default=20e6,
         help='number of timesteps to train')
     parser.add_argument("--expl_noise", default=0.126, type=float,
         help="std of Gaussian exploration noise")
     parser.add_argument("--batch_size", default=100, type=int,
-        help="batch size for both actor and critic")
-    parser.add_argument("--discount", default=0.99, type=float,
-        help="discount factor")
-    parser.add_argument("--tau", default=0.046, type=float,
-        help="target network update rate")
-    parser.add_argument("--policy_noise", default=0.2, type=float,
-        help="noise added to target policy during critic update")
+        help="batch size for dynamics model")
     parser.add_argument("--noise_clip", default=0.5, type=float,
         help="range to clip target policy noise")
-    parser.add_argument("--policy_freq", default=2, type=int,
-        help="frequency of delayed policy updates")
     parser.add_argument("--expID", default=99, type=int)
     parser.add_argument('--video_length', default=10, type=int,
         help='length of video to generate (in seconds)')

@@ -3,15 +3,16 @@ import numpy as np
 import torch
 import os
 import utils
-import TD3
 import json
 import time
 import wandb
-from arguments import get_args
+from arguments_mb import get_args
 from vecenvs import SubprocVecEnv 
 import checkpoint as cp
 from config import *
 from gym import envs
+from dynamics_model import DynamicsModel
+from MPC import RandomShooting
 
 
 def train(args):
@@ -57,7 +58,7 @@ def train(args):
     args.limb_obs_size, args.max_action = utils.registerEnvs(envs_train_names, args.max_episode_steps, args.custom_xml)
     max_num_limbs = max([len(args.graphs[env_name]) for env_name in envs_train_names])
     # create vectorized training env
-    obs_max_len = max_num_limbs * args.limb_obs_size
+    obs_max_len = max([len(args.graphs[env_name]) for env_name in envs_train_names]) * args.limb_obs_size
     print("see current registered environments!", envs.registry.all())
     envs_train = [utils.makeEnvWrapper(name, obs_max_len, args.seed) for name in envs_train_names]
     envs_train = SubprocVecEnv(envs_train)  # vectorized env
@@ -67,8 +68,19 @@ def train(args):
     # determine the maximum number of children in all the training envs
     if args.max_children is None:
         args.max_children = utils.findMaxChildren(envs_train_names, args.graphs)
-    # setup agent policy
-    policy = TD3.TD3(args)
+
+    # setup Model here
+    model = DynamicsModel(state_dim=args.limb_obs_size,
+                          action_dim=1,
+                          msg_dim=args.msg_dim,
+                          batch_size=args.batch_size,
+                          max_children=args.max_children,
+                          disable_fold=args.disable_fold,
+                          td=args.td,
+                          bu=args.bu,
+                          lr=args.lr)
+    # setup MPC here
+    mpc = None
 
     # Create new training instance or load previous checkpoint ========================
     if cp.has_checkpoint(exp_path, rb_path):
@@ -107,13 +119,16 @@ def train(args):
             if collect_done:
                 # log updates and train policy
                 if this_training_timesteps != 0:
-                    policy.train(replay_buffer, episode_timesteps_list, args.batch_size,
-                                args.discount, args.tau, args.policy_noise, args.noise_clip,
-                                args.policy_freq, graphs=args.graphs, envs_train_names=envs_train_names[:num_envs_train])
-                    # add to tensorboard display
+                    train_losses = model.train(replay_buffer,
+                                               episode_timesteps_list,
+                                               graphs=args.graphs,
+                                               envs_train_names=envs_train_names[:num_envs_train])
+                    
+                    # add to wandb display
                     for i in range(num_envs_train):
                         wandb.log({'{}_episode_reward'.format(envs_train_names[i]): episode_reward_list[i],
                                 '{}_episode_len'.format(envs_train_names[i]): episode_timesteps_list[i]}, step=total_timesteps)
+                    wandb.log(train_losses, step=total_timesteps)
 
                     # print to console
                     print("-" * 50 + "\nExpID: {}, FPS: {:.2f}, TotalT: {}, EpisodeNum: {}, SampleNum: {}, ReplayBSize: {}".format(
@@ -128,7 +143,7 @@ def train(args):
                 # save model and replay buffers
                 if timesteps_since_saving >= args.save_freq:
                     timesteps_since_saving = 0
-                    model_saved_path = cp.save_model(exp_path, policy, total_timesteps,
+                    model_saved_path = cp.save_model(exp_path, model, total_timesteps,
                                                     episode_num, num_samples, replay_buffer,
                                                     envs_train_names, args)
                     print("*** model saved to {} ***".format(model_saved_path))
@@ -148,20 +163,20 @@ def train(args):
             # sample action randomly for sometime and then according to the policy
             if total_timesteps < args.start_timesteps:
                 action_list = [np.random.uniform(low=envs_train.action_space.low[0],
-                                                high=envs_train.action_space.high[0],
-                                                size=max_num_limbs) for i in range(num_envs_train)]
+                                                 high=envs_train.action_space.high[0],
+                                                 size=max_num_limbs) for i in range(num_envs_train)]
             else:
                 action_list = []
                 for i in range(num_envs_train):
                     # dynamically change the graph structure of the modular policy
-                    policy.change_morphology(args.graphs[envs_train_names[i]])
+                    model.change_morphology(args.graphs[envs_train_names[i]])
                     # remove 0 padding of obs before feeding into the policy (trick for vectorized env)
                     obs = np.array(obs_list[i][:args.limb_obs_size * len(args.graphs[envs_train_names[i]])])
-                    policy_action = policy.select_action(obs)
+                    policy_action = model.select_action(obs, mpc, max_num_limbs)
                     if args.expl_noise != 0:
                         policy_action = (policy_action + np.random.normal(0, args.expl_noise,
                             size=policy_action.size)).clip(envs_train.action_space.low[0],
-                            envs_train.action_space.high[0])
+                                                           envs_train.action_space.high[0])
                     # add 0-padding to ensure that size is the same for all envs
                     policy_action = np.append(policy_action, np.array([0 for i in range(max_num_limbs - policy_action.size)]))
                     action_list.append(policy_action)
@@ -204,7 +219,7 @@ def train(args):
             collect_done = all(done_list)
 
         # save checkpoint after training ===========================================================
-        model_saved_path = cp.save_model(exp_path, policy, total_timesteps,
+        model_saved_path = cp.save_model(exp_path, model, total_timesteps,
                                         episode_num, num_samples, replay_buffer,
                                         envs_train_names, args)
         print("*** training finished and model saved to {} ***".format(model_saved_path))
