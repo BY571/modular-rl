@@ -50,6 +50,9 @@ class DynamicsModel(BaseDynamicsModel):
     def load(self, fname):
         self.dynamics_model.load_state_dict(torch.load('%s_dynamics_model.pth' % fname))
 
+    def predict(self, observations, actions):
+        return self.dynamics_model(observations, actions)
+
     def select_action(self, obs, mpc, max_num_limbs):
         # TODO: currently random actions for debugging
         action = np.random.uniform(low=-1, high=1, size=max_num_limbs)

@@ -1,4 +1,5 @@
 from __future__ import print_function
+from random import Random
 import numpy as np
 import torch
 import os
@@ -80,7 +81,10 @@ def train(args):
                           bu=args.bu,
                           lr=args.lr)
     # setup MPC here
-    mpc = None
+    mpc = RandomShooting(env_name=envs_train_names[0],
+                         max_num_limbs=max_num_limbs,
+                         n_planner=100,
+                         horizon=12)
 
     # Create new training instance or load previous checkpoint ========================
     if cp.has_checkpoint(exp_path, rb_path):
@@ -172,7 +176,7 @@ def train(args):
                     model.change_morphology(args.graphs[envs_train_names[i]])
                     # remove 0 padding of obs before feeding into the policy (trick for vectorized env)
                     obs = np.array(obs_list[i][:args.limb_obs_size * len(args.graphs[envs_train_names[i]])])
-                    policy_action = model.select_action(obs, mpc, max_num_limbs)
+                    policy_action = mpc.get_action(obs, model) #model.select_action(obs, mpc, max_num_limbs)
                     if args.expl_noise != 0:
                         policy_action = (policy_action + np.random.normal(0, args.expl_noise,
                             size=policy_action.size)).clip(envs_train.action_space.low[0],

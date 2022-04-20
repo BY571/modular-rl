@@ -3,17 +3,26 @@ import gym
 import numpy as np
 import torch
 import scipy.stats as stats
+from reward_function import walker_reward
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+def get_reward_function(env_name):
+    if "walker" in env_name:
+        return walker_reward
+    else:
+        raise NotImplementedError
+
 
 class MPC():
-    def __init__(self, action_space, n_planner, horizon, device)-> None:
+    def __init__(self, env_name, max_num_limbs, n_planner, horizon)-> None:
 
-        self.action_space = action_space.shape[0]
-        self.action_low = action_space.low
-        self.action_high = action_space.high
+        self.action_size = max_num_limbs
+        self.action_low = -1
+        self.action_high = 1
 
-        self.device = device
         self.n_planner = n_planner
         self.horizon = horizon
+        self.reward_function = get_reward_function(env_name)
 
     
     def get_action(self, state: torch.Tensor, model: torch.nn.Module, noise: bool=False)-> torch.Tensor:
@@ -21,19 +30,19 @@ class MPC():
 
 
 class RandomShooting(MPC):
-    def __init__(self, action_space, config, device) -> None:
-        super(RandomShooting, self).__init__(action_space=action_space, config=config, device=device)
+    def __init__(self, env_name, max_num_limbs, n_planner, horizon) -> None:
+        super(RandomShooting, self).__init__(env_name=env_name, max_num_limbs=max_num_limbs, n_planner=n_planner, horizon=horizon)
 
 
     def _get_continuous_actions(self, )-> torch.Tensor:
         actions = np.random.uniform(low=self.action_low,
                                     high=self.action_high,
-                                    size=(self.n_planner, self.horizon, self.action_space))
-        return torch.from_numpy(actions).to(self.device).float()
+                                    size=(self.n_planner, self.horizon, self.action_size))
+        return torch.from_numpy(actions).to(device).float()
     
-    def get_action(self, state: torch.Tensor, model: torch.nn.Module)-> torch.Tensor:
+    def get_action(self, state: np.array, model: torch.nn.Module)-> torch.Tensor:
         state = torch.from_numpy(state[None, :]).float()
-        initial_states = state.repeat((self.n_planner, 1)).to(self.device)
+        initial_states = state.repeat((self.n_planner, 1)).to(device)
         rollout_actions = self._get_continuous_actions()
         returns = self.compute_returns(initial_states, rollout_actions, model)
         best_action_idx = returns.argmax()
@@ -43,14 +52,14 @@ class RandomShooting(MPC):
 
 
     def compute_returns(self, states: torch.Tensor, actions: torch.Tensor, model: torch.nn.Module)-> Tuple[torch.Tensor]:
-        returns = torch.zeros((self.n_planner, 1)).to(self.device)
+        returns = torch.zeros((self.n_planner, 1)).to(device)
         for t in range(self.horizon):
             with torch.no_grad():
-                delta_states = model(states, actions[:, t, :])
+                delta_states = model.predict(states, actions[:, t, :])
                 states += delta_states
-            returns += rewards
+            returns += self.reward_function(states, actions[:, t, :])
 
-        return returns, state_list
+        return returns
 
 class CEM(MPC):
     def __init__(self, action_space, config, device=None)-> None:
