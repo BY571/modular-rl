@@ -40,5 +40,10 @@ def get_args():
         help="maximum replay buffer size across all morphologies")
     parser.add_argument("--max_children", type=int, default=None,
         help="maximum number of children allowed at each node (optional; facilitate model loading if max_children is different at training time)")
+
+# MPC Arguments
+    parser.add_argument("--n-planner", type=int, default=500, help="Number of parallel planning trajectories")
+    parser.add_argument("--horizon", type=int, default=12, help="Planning trajectory horizon")
+    parser.add_argument("--mpc-type", type=str, choices=["random-shooting", "cem", "pddm"], default="pddm")
     args = parser.parse_args()
     return args

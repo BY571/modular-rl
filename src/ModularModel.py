@@ -76,10 +76,10 @@ class ModelDownAction(nn.Module):
     """a top-down module used in bothway message passing that passes messages to children and outputs q-values"""
     # input dim is state dim if only using top down message passing
     # if using bottom up and then top down, it is the node's outgoing message dim
-    def __init__(self, self_input_dim, action_dim, msg_dim, max_children):
+    def __init__(self, state_dim, action_dim, msg_dim, max_children):
         super(ModelDownAction, self).__init__()
-        self.model = MLPBase(self_input_dim + action_dim + msg_dim, self_input_dim)
-        self.msg_base = MLPBase(self_input_dim + msg_dim, msg_dim * max_children)
+        self.model = MLPBase(state_dim + action_dim + msg_dim, state_dim)
+        self.msg_base = MLPBase(state_dim + msg_dim, msg_dim * max_children)
 
     def forward(self, x, u, m):
         xum = torch.cat([x, u, m], dim=-1)

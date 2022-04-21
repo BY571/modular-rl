@@ -13,7 +13,7 @@ import checkpoint as cp
 from config import *
 from gym import envs
 from dynamics_model import DynamicsModel
-from MPC import RandomShooting
+from MPC import RandomShooting, CEM, PDDM
 
 
 def train(args):
@@ -81,15 +81,28 @@ def train(args):
                           bu=args.bu,
                           lr=args.lr)
     # setup MPC here
-    mpc = RandomShooting(env_name=envs_train_names[0],
-                         max_num_limbs=max_num_limbs,
-                         n_planner=100,
-                         horizon=12)
+    if args.mpc_type == "random-shooting":
+        mpc = RandomShooting(env_name=envs_train_names[0],
+                             max_num_limbs=max_num_limbs,
+                             n_planner=args.n_planner,
+                             horizon=args.horizon)
+    elif args.mpc_type == "cem":
+        mpc = CEM(env_name=envs_train_names[0],
+                  max_num_limbs=max_num_limbs,
+                  n_planner=args.n_planner,
+                  horizon=args.horizon)
+    elif args.mpc_type == "pddm":
+        mpc = PDDM(env_name=envs_train_names[0],
+                   max_num_limbs=max_num_limbs,
+                   n_planner=args.n_planner,
+                   horizon=args.horizon)
+    else:
+        raise NotImplementedError
 
     # Create new training instance or load previous checkpoint ========================
     if cp.has_checkpoint(exp_path, rb_path):
         print("*** loading checkpoint from {} ***".format(exp_path))
-        total_timesteps, episode_num, replay_buffer, num_samples, loaded_path = cp.load_checkpoint(exp_path, rb_path, policy, args)
+        total_timesteps, episode_num, replay_buffer, num_samples, loaded_path = cp.load_checkpoint(exp_path, rb_path, model, args)
         print("*** checkpoint loaded from {} ***".format(loaded_path))
     else:
         print("*** training from scratch ***")
