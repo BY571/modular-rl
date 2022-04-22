@@ -188,7 +188,8 @@ def train(args):
                     # dynamically change the graph structure of the modular policy
                     model.change_morphology(args.graphs[envs_train_names[i]])
                     # remove 0 padding of obs before feeding into the policy (trick for vectorized env)
-                    obs = np.array(obs_list[i][:args.limb_obs_size * len(args.graphs[envs_train_names[i]])])
+                    num_limbs = len(args.graphs[envs_train_names[i]])
+                    obs = np.array(obs_list[i][:args.limb_obs_size * num_limbs])
                     policy_action = mpc.get_action(obs, model) #model.select_action(obs, mpc, max_num_limbs)
                     if args.expl_noise != 0:
                         policy_action = (policy_action + np.random.normal(0, args.expl_noise,

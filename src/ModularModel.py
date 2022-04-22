@@ -152,7 +152,7 @@ class ModelGraphPolicy(nn.Module):
             self.fold.cuda()
             self.zeroFold_td = self.fold.add("zero_func_td")
             self.zeroFold_bu = self.fold.add("zero_func_bu")
-            self.x1_fold = []
+            self.ds = []
         assert state.shape[1] == self.state_dim * self.num_limbs, 'state.shape[1] expects {} but got {} with num_limbs being {} and state_dim being {}'.format(self.state_dim * self.num_limbs, state.shape[1], self.num_limbs, self.state_dim)
         for i in range(self.num_limbs):
             self.input_state[i] = state[:, i * self.state_dim:(i + 1) * self.state_dim]
@@ -175,23 +175,20 @@ class ModelGraphPolicy(nn.Module):
         if not self.bu and not self.td:
             for i in range(self.num_limbs):
                 if not self.disable_fold:
-                    self.x1[i] = self.fold.add('dynamics' + str(0).zfill(3), self.input_state[i], self.input_action[i])
+                    self.delta_state[i] = self.fold.add('dynamics' + str(0).zfill(3), self.input_state[i], self.input_action[i])
                 else:
-                    self.x1[i] = self.dynamics[i](self.input_state[i], self.input_action[i])
+                    self.delta_state[i] = self.dynamics[i](self.input_state[i], self.input_action[i])
 
         if not self.disable_fold:
-            if self.bu and not self.td:
-                self.x1_fold = self.x1_fold + [self.x1]
-            else:
-                self.x1_fold = self.x1_fold + self.x1
-
-            self.x1 = self.fold.apply(self, [self.x1_fold])[0]
-            self.x1 = torch.transpose(self.x1, 0, 1)
+            self.ds += self.delta_state
+            self.delta_state = self.fold.apply(self, [self.ds])[0]
+            self.delta_state = torch.transpose(self.delta_state, 0, 1)
             self.fold = None
+            self.delta_state = self.delta_state.flatten(1)
         else:
-            self.x1 = torch.stack(self.x1, dim=-1) 
-        # self.x1 shape: (batch, num_limps, state_dim)
-        return self.x1.flatten(1,2)
+            self.delta_state = torch.stack(self.delta_state, dim=-1) 
+
+        return torch.squeeze(self.delta_state)
 
 
     def bottom_up_transmission(self, node):
@@ -219,12 +216,12 @@ class ModelGraphPolicy(nn.Module):
             if self.td:
                 self.msg_up[node] = self.fold.add('sNet' + str(0).zfill(3), state, action, *msg_in)
             else:
-                self.msg_up[node], self.x1 = self.fold.add('sNet' + str(0).zfill(3), state, action, *msg_in).split(2)
+                self.msg_up[node], self.delta_state[node] = self.fold.add('sNet' + str(0).zfill(3), state, action, *msg_in).split(2)
         else:
             if self.td:
                 self.msg_up[node] = self.sNet[node](state, action, *msg_in)
             else:
-                self.msg_up[node], self.x1 = self.sNet[node](state, action, *msg_in)
+                self.msg_up[node], self.delta_state[node] = self.sNet[node](state, action, *msg_in)
 
         return self.msg_up[node]
 
@@ -262,9 +259,9 @@ class ModelGraphPolicy(nn.Module):
             msg_in = self.msg_slice(parent_msg, self_children_idx)
 
         if not self.disable_fold:
-            self.x1[node], self.msg_down[node] = self.fold.add('dynamics' + str(0).zfill(3), state, action, msg_in).split(2)
+            self.delta_state[node], self.msg_down[node] = self.fold.add('dynamics' + str(0).zfill(3), state, action, msg_in).split(2)
         else:
-            self.x1[node], self.msg_down[node] = self.dynamics[node](state, action, msg_in)
+            self.delta_state[node], self.msg_down[node] = self.dynamics[node](state, action, msg_in)
 
         return self.msg_down[node]
 
@@ -284,7 +281,7 @@ class ModelGraphPolicy(nn.Module):
         return torch.split(x, x.shape[-1] // self.max_children, dim=-1)[idx]
 
     def clear_buffer(self):
-        self.x1 = [None] * self.num_limbs
+        self.delta_state = [None] * self.num_limbs
         self.input_state = [None] * self.num_limbs
         self.input_action = [None] * self.num_limbs
         self.msg_down = [None] * self.num_limbs
