@@ -26,7 +26,7 @@ class BaseDynamicsModel(Object):
 
 
 class DynamicsModel(BaseDynamicsModel):
-    def __init__(self, state_dim, action_dim, msg_dim, batch_size, max_children, disable_fold, td, bu, lr):
+    def __init__(self, state_dim, action_dim, msg_dim, batch_size, max_children, disable_fold, td, bu, lr, n_planner):
 
 
         self.batch_size = batch_size
@@ -37,7 +37,8 @@ class DynamicsModel(BaseDynamicsModel):
                                                max_children=max_children,
                                                disable_fold=disable_fold,
                                                td=td,
-                                               bu=bu)
+                                               bu=bu,
+                                               n_planner=n_planner)
 
         self.optimizer = torch.optim.Adam(self.dynamics_model.parameters(), lr=lr)
     
@@ -50,8 +51,8 @@ class DynamicsModel(BaseDynamicsModel):
     def load(self, fname):
         self.dynamics_model.load_state_dict(torch.load('%s_dynamics_model.pth' % fname))
 
-    def predict(self, observations, actions):
-        return self.dynamics_model(observations, actions)
+    def predict(self, observations, actions, mode="planning"):
+        return self.dynamics_model(observations, actions, mode=mode)
 
     def select_action(self, obs, mpc, max_num_limbs):
         # TODO: currently random actions for debugging

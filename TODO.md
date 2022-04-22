@@ -3,7 +3,7 @@
 
 # No message passing [X]
 # Topdown only [ ]
-# Bottomup only [ ]
+# Bottomup only [X]
 # Both message passing [ ]
 
 # Verify Reward function [ ]

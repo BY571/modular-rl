@@ -79,7 +79,8 @@ def train(args):
                           disable_fold=args.disable_fold,
                           td=args.td,
                           bu=args.bu,
-                          lr=args.lr)
+                          lr=args.lr,
+                          n_planner=args.n_planner)
     # setup MPC here
     if args.mpc_type == "random-shooting":
         mpc = RandomShooting(env_name=envs_train_names[0],

@@ -44,6 +44,6 @@ def get_args():
 # MPC Arguments
     parser.add_argument("--n-planner", type=int, default=500, help="Number of parallel planning trajectories")
     parser.add_argument("--horizon", type=int, default=12, help="Planning trajectory horizon")
-    parser.add_argument("--mpc-type", type=str, choices=["random-shooting", "cem", "pddm"], default="pddm")
+    parser.add_argument("--mpc-type", type=str, choices=["random-shooting", "cem", "pddm"], default="random-shooting")
     args = parser.parse_args()
     return args

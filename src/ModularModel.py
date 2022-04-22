@@ -94,7 +94,7 @@ class ModelDownAction(nn.Module):
 
 class ModelGraphPolicy(nn.Module):
     """a weight-sharing dynamic graph policy that changes its structure based on different morphologies and passes messages between nodes"""
-    def __init__(self, state_dim, action_dim, msg_dim, batch_size, max_children, disable_fold, td, bu):
+    def __init__(self, state_dim, action_dim, msg_dim, batch_size, max_children, disable_fold, td, bu, n_planner):
         super(ModelGraphPolicy, self).__init__()
         self.num_limbs = 1
         self.x1 = [None] * self.num_limbs
@@ -108,6 +108,7 @@ class ModelGraphPolicy(nn.Module):
         self.disable_fold = disable_fold
         self.state_dim = state_dim
         self.action_dim = action_dim
+        self.n_planner = n_planner
 
         assert self.action_dim == 1
         self.td = td
@@ -145,8 +146,11 @@ class ModelGraphPolicy(nn.Module):
             for i in range(self.max_children):
                 setattr(self, 'get_{}'.format(i), self.addFunction(i))
 
-    def forward(self, state, action):
+    def forward(self, state, action, mode='train'):
         self.clear_buffer()
+        if mode == 'planning':
+            temp = self.batch_size
+            self.batch_size = self.n_planner
         if not self.disable_fold:
             self.fold = torchfold.Fold()
             self.fold.cuda()
@@ -188,6 +192,8 @@ class ModelGraphPolicy(nn.Module):
         else:
             self.delta_state = torch.stack(self.delta_state, dim=-1) 
 
+        if mode == 'planning':
+            self.batch_size = temp
         return torch.squeeze(self.delta_state)
 
 
